@@ -1,53 +1,103 @@
-// Keyboard and pointer input. Held keys give a steering direction; one-shot presses (start or
-// restart, pause) are queued as bit flags and taken once by the loop, so a press between two
-// frames is never lost and never counted twice.
+// Keyboard and mouse state. Actions are edge-triggered (pressed this frame)
+// so menus and interactions never double-fire.
 
-export const ACTION_CONFIRM = 1;
-export const ACTION_PAUSE = 2;
+export const ACTION_CONFIRM = 'confirm';
+export const ACTION_PAUSE = 'pause';
+export const ACTION_INTERACT = 'interact';
+export const ACTION_MUTE = 'mute';
+export const ACTION_WEAPON = 'weapon';
 
-const LEFT = new Set(['ArrowLeft', 'KeyA']);
-const RIGHT = new Set(['ArrowRight', 'KeyD']);
-const CONFIRM = new Set(['Space', 'Enter']);
-const PAUSE = new Set(['KeyP', 'Escape']);
+const KEYMAP = {
+  KeyW: 'up', ArrowUp: 'up',
+  KeyS: 'down', ArrowDown: 'down',
+  KeyA: 'left', ArrowLeft: 'left',
+  KeyD: 'right', ArrowRight: 'right',
+  ShiftLeft: 'sprint', ShiftRight: 'sprint',
+  Space: 'brake',
+  KeyE: 'interact',
+  KeyF: 'punch',
+  KeyQ: 'weapon',
+  KeyM: 'mute',
+  KeyR: 'restart',
+  Enter: 'confirm',
+  Escape: 'pause',
+  KeyP: 'pause',
+};
 
-export function createInput(target) {
-  let left = false;
-  let right = false;
-  let actions = 0;
+export function createInput(canvas) {
+  const held = new Set();
+  const pressed = new Set();
+  const mouse = { x: 0, y: 0, down: false, clicked: false, wheel: 0 };
+  let enabled = true;
 
-  window.addEventListener('keydown', (event) => {
-    if (LEFT.has(event.code)) left = true;
-    else if (RIGHT.has(event.code)) right = true;
-    else if (CONFIRM.has(event.code)) {
-      if (!event.repeat) actions |= ACTION_CONFIRM;
-    } else if (PAUSE.has(event.code)) {
-      if (!event.repeat) actions |= ACTION_PAUSE;
-    } else return;
-    event.preventDefault();
-  });
-  window.addEventListener('keyup', (event) => {
-    if (LEFT.has(event.code)) left = false;
-    else if (RIGHT.has(event.code)) right = false;
-  });
-  // A key released while the tab is hidden never sends keyup: let go of everything on blur.
-  window.addEventListener('blur', () => {
-    left = false;
-    right = false;
-  });
-  target.addEventListener('pointerdown', () => {
-    actions |= ACTION_CONFIRM;
-  });
+  function onKeyDown(event) {
+    if (!enabled) return;
+    const action = KEYMAP[event.code];
+    if (!action) return;
+    if (['up', 'down', 'left', 'right', 'brake'].includes(action)) event.preventDefault();
+    if (!held.has(action)) pressed.add(action);
+    held.add(action);
+  }
+
+  function onKeyUp(event) {
+    const action = KEYMAP[event.code];
+    if (action) held.delete(action);
+  }
+
+  function onMouseMove(event) {
+    const rect = canvas.getBoundingClientRect();
+    mouse.x = event.clientX - rect.left;
+    mouse.y = event.clientY - rect.top;
+  }
+
+  function onMouseDown(event) {
+    if (event.button === 0) {
+      mouse.down = true;
+      mouse.clicked = true;
+    }
+  }
+
+  function onMouseUp(event) {
+    if (event.button === 0) mouse.down = false;
+  }
+
+  function onWheel(event) {
+    mouse.wheel += Math.sign(event.deltaY);
+  }
+
+  function onBlur() {
+    held.clear();
+    mouse.down = false;
+  }
+
+  window.addEventListener('keydown', onKeyDown);
+  window.addEventListener('keyup', onKeyUp);
+  window.addEventListener('blur', onBlur);
+  canvas.addEventListener('mousemove', onMouseMove);
+  canvas.addEventListener('mousedown', onMouseDown);
+  window.addEventListener('mouseup', onMouseUp);
+  canvas.addEventListener('wheel', onWheel, { passive: true });
+  canvas.addEventListener('contextmenu', (event) => event.preventDefault());
 
   return {
-    /** -1 for left, 1 for right, 0 for neither or both. */
-    direction() {
-      return (right ? 1 : 0) - (left ? 1 : 0);
+    mouse,
+    isHeld(action) { return held.has(action); },
+    wasPressed(action) { return pressed.has(action); },
+    consume(action) { pressed.delete(action); },
+    axis() {
+      let x = 0;
+      let y = 0;
+      if (held.has('left')) x -= 1;
+      if (held.has('right')) x += 1;
+      if (held.has('up')) y -= 1;
+      if (held.has('down')) y += 1;
+      return { x, y };
     },
-    /** The one-shot presses since the last call, as ACTION_* flags. */
-    takeActions() {
-      const taken = actions;
-      actions = 0;
-      return taken;
+    endFrame() {
+      pressed.clear();
+      mouse.clicked = false;
+      mouse.wheel = 0;
     },
+    setEnabled(value) { enabled = value; },
   };
 }

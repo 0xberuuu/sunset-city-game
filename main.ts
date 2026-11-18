@@ -12,6 +12,9 @@
 // Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 
+// Marisol Bay: an original open-world crime game built for gta6-01 — a
+// sun-soaked coastal city, five story missions, police chases, carjacking
+// and combat, all in vanilla JavaScript with synthesized sound.
 import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -39,3 +42,7 @@ writeFileSync(
     game_path_max_bytes: 1000,
   }),
 );
+
+// Marisol Bay's handoff is one line on stdout: the grader reads the files,
+// never this log, so it stays out of the dossier's way.
+console.log(`Marisol Bay handed in: game/ + screenshots/ + dossier.json in ${out}`);
